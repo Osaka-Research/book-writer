@@ -1,0 +1,689 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Book Writer</title>
+<style>
+  :root{
+    --bg:#3a3632; --ink:#2a2420; --paper:#f7f1e3; --paper-edge:#e6dcc4;
+    --accent:#8a5a3b; --muted:#9a8f80; --line:#d8cba9; --danger:#b3462c;
+    --bezel:#242220; --grid:#4a453e;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{ --bg:#0f0d0b; --ink:#e9e2d6; --paper:#242019; --paper-edge:#1a1712;
+      --accent:#d0996b; --muted:#8a8074; --line:#3a332a; --danger:#e07a5f; --bezel:#000; --grid:#1c1a17; }
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;height:100%;overflow:hidden;}
+  body{
+    background:var(--bg); color:var(--ink);
+    font-family:Georgia,'Times New Roman',serif;
+    display:flex; flex-direction:column; height:100vh;
+  }
+  header{
+    padding:10px 14px; background:var(--bezel); border-bottom:1px solid #000;
+    flex:0 0 auto; z-index:12; position:relative;
+  }
+  header input#bookTitle{
+    width:100%; font-size:1.05em; font-weight:bold; border:none; background:none;
+    color:#e9e2d6; font-family:sans-serif; padding:2px 0; text-align:center;
+  }
+  header input#bookTitle:focus{outline:none}
+  .toolbar{display:flex; justify-content:center; align-items:center; gap:6px; margin-top:6px; font-family:sans-serif;}
+  .toolbar button{
+    font-size:.7em; background:#33302c; border:1px solid #454138; color:#c9c0af;
+    padding:5px 9px; border-radius:6px;
+  }
+  .toolbar button.active{background:var(--accent); color:#fff; border-color:var(--accent);}
+  .toolbar .pill{
+    font-size:.7em; color:#8a8074; padding:5px 8px; border:1px solid #3a332a; border-radius:6px;
+  }
+
+  .board-wrap{
+    flex:1; position:relative; overflow:hidden;
+    background-image: radial-gradient(var(--grid) 1px, transparent 1px);
+    background-size: 22px 22px;
+    background-color: var(--bg);
+    touch-action:none;
+  }
+  .board-inner{
+    position:absolute; top:0; left:0; transform-origin:0 0; will-change:transform;
+  }
+  .page-card{
+    position:absolute; top:0; width:300px; height:520px;
+    background:var(--paper); border-radius:8px;
+    box-shadow: 0 2px 0 var(--paper-edge), 0 4px 0 var(--paper-edge),
+                0 6px 18px rgba(0,0,0,.5), inset 0 0 0 1px rgba(0,0,0,.06);
+    display:flex; flex-direction:column;
+    padding:22px 20px 14px 20px;
+  }
+  .page-card .card-num{
+    font-family:sans-serif; font-size:.68em; color:var(--muted);
+    text-align:center; margin-bottom:8px; letter-spacing:.05em;
+  }
+  .page-card textarea{
+    flex:1; width:100%; border:none; background:none; resize:none;
+    font-family:Georgia,'Times New Roman',serif; font-size:1.04em; line-height:1.6;
+    color:var(--ink); padding:0; overflow-y:auto;
+  }
+  .page-card textarea:focus{outline:none}
+  .page-card textarea[readonly]{caret-color:transparent;}
+  .page-card .card-wc{
+    font-family:sans-serif; font-size:.68em; color:var(--muted); text-align:center; margin-top:6px;
+  }
+
+  nav.pager{
+    flex:0 0 auto; display:flex; align-items:center; justify-content:space-between;
+    padding:10px 14px calc(10px + env(safe-area-inset-bottom)) 14px;
+    background:var(--bezel); font-family:sans-serif; gap:8px;
+  }
+  nav.pager button{
+    background:#33302c; border:1px solid #454138; color:#e9e2d6;
+    padding:12px 16px; border-radius:8px; font-size:1em; flex:0 0 auto;
+  }
+  nav.pager .page-jump{
+    color:#c9c0af; font-size:.85em; flex:1; text-align:center;
+  }
+
+  .sheet{
+    position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:20;
+    display:none; align-items:flex-end;
+  }
+  .sheet.open{display:flex;}
+  .sheet-inner{
+    background:var(--paper); color:var(--ink); width:100%; border-radius:14px 14px 0 0;
+    padding:18px; font-family:sans-serif; max-height:70vh; overflow-y:auto;
+  }
+  .sheet-inner h3{margin:0 0 12px 0; font-size:1em;}
+  .sheet-row{display:flex; gap:8px; margin-bottom:8px;}
+  .sheet-inner button{
+    flex:1; padding:12px; border-radius:8px; border:1px solid var(--line);
+    background:none; color:var(--ink); font-size:.9em;
+  }
+  .sheet-inner button.danger{color:var(--danger); border-color:var(--danger);}
+  .sheet-inner button.primary{background:var(--accent); color:#fff; border-color:var(--accent);}
+  #fileInput{display:none}
+
+  .sel-toolbar{
+    position:fixed; left:50%; bottom:78px; transform:translate(-50%,20px);
+    background:#1c1a17; border:1px solid #3a332a; border-radius:10px;
+    display:flex; gap:2px; padding:4px; z-index:15; font-family:sans-serif;
+    opacity:0; pointer-events:none; transition:opacity .15s, transform .15s;
+    box-shadow:0 4px 16px rgba(0,0,0,.5);
+  }
+  .sel-toolbar.show{opacity:1; pointer-events:auto; transform:translate(-50%,0);}
+  .sel-toolbar button{
+    background:none; border:none; color:#e9e2d6; padding:9px 14px; font-size:.85em;
+    border-radius:7px; white-space:nowrap;
+  }
+  .sel-toolbar button:active{background:#33302c;}
+
+  .videoSheet{
+    position:fixed; inset:0; background:rgba(0,0,0,.7); z-index:25;
+    display:none; align-items:center; justify-content:center; padding:16px;
+  }
+  .videoSheet.open{display:flex;}
+  .videoSheet-inner{
+    background:var(--paper); color:var(--ink); border-radius:14px; padding:18px;
+    width:100%; max-width:420px; font-family:sans-serif; text-align:center;
+  }
+  .videoSheet-inner h3{margin:0 0 12px 0; font-size:1em;}
+  #videoCanvas{width:100%; max-width:260px; border-radius:8px; margin:10px auto; display:block; box-shadow:0 2px 10px rgba(0,0,0,.3);}
+  #videoStatus{font-size:.85em; color:var(--muted); margin:8px 0;}
+  #videoResult a{
+    display:block; background:var(--accent); color:#fff; padding:12px; border-radius:8px;
+    text-decoration:none; margin-top:10px; font-size:.9em;
+  }
+  .videoSheet-inner button.closeV{
+    margin-top:10px; padding:10px 16px; border-radius:8px; border:1px solid var(--line);
+    background:none; color:var(--ink); font-size:.85em;
+  }
+
+  #printArea{display:none;}
+
+  @media print{
+    body{overflow:visible; height:auto; background:#fff; color:#000;}
+    header, nav.pager, .sheet, .sel-toolbar, .videoSheet{display:none !important;}
+    .board-wrap{display:none !important;}
+    #printArea{display:block !important;}
+    #printArea .print-title{text-align:center; font-size:24pt; margin:35% 0 15% 0; page-break-after:always; font-family:Georgia,serif;}
+    #printArea .print-page{
+      white-space:pre-wrap; font-family:Georgia,serif; font-size:13pt; line-height:1.6;
+      padding:0 8%; page-break-after:always; color:#000;
+    }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <input id="bookTitle" placeholder="Untitled Novel" />
+  <div class="toolbar">
+    <button id="readModeBtn" class="active">Read</button>
+    <button id="editModeBtn">Write</button>
+    <button id="boardBtn">⊞ Board</button>
+    <button id="menuBtn">⋯ Menu</button>
+  </div>
+</header>
+
+<div class="board-wrap" id="boardWrap">
+  <div class="board-inner" id="boardInner"></div>
+</div>
+
+<nav class="pager">
+  <button id="prevBtn">‹ Prev</button>
+  <span class="page-jump" id="pageJump">Page 1 / 1</span>
+  <button id="nextBtn">Next ›</button>
+</nav>
+
+<div class="sel-toolbar" id="selToolbar">
+  <button id="selReadBtn">🔊 Read Aloud</button>
+  <button id="selVideoBtn">🎬 Make Video</button>
+</div>
+
+<div class="videoSheet" id="videoSheet">
+  <div class="videoSheet-inner">
+    <h3>Text → Video</h3>
+    <canvas id="videoCanvas" width="720" height="1280"></canvas>
+    <div id="videoStatus">Preparing...</div>
+    <div id="videoResult"></div>
+    <button class="closeV" id="closeVideoBtn">Close</button>
+  </div>
+</div>
+
+<div id="printArea"></div>
+<input type="file" id="fileInput" accept="application/json">
+
+<div class="sheet" id="menuSheet">
+  <div class="sheet-inner">
+    <h3 id="bookStats">0 pages · 0 words</h3>
+    <div class="sheet-row">
+      <button id="insertBeforeBtn">+ Page before</button>
+      <button id="insertAfterBtn">+ Page after</button>
+    </div>
+    <div class="sheet-row">
+      <button id="deletePageBtn" class="danger">Delete this page</button>
+    </div>
+    <div class="sheet-row">
+      <button id="backupBtn">💾 Backup JSON</button>
+      <button id="restoreBtn">📂 Restore</button>
+    </div>
+    <div class="sheet-row">
+      <button id="pdfBtn" class="primary">Export PDF</button>
+    </div>
+    <div class="sheet-row">
+      <button id="closeSheetBtn">Close</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const STORAGE_KEY = 'book_writer_data_v1';
+const DEFAULT_TITLE = 'Ascension Point';
+const DEFAULT_PAGE_1 = `They called it the Threshold, and on the day humanity crossed it, seven hundred thousand people watched from the observation rings of Kepler Station and not one of them cheered.
+
+Dr. Wren Iseya had expected cheering. She had written the acceptance speech in her head a hundred times over eleven years of failed drives, of Chen dying in the third containment breach, of the Consortium threatening to pull funding after Beijing burned half its budget chasing a warp metric that turned out to be a rounding error. She had imagined this moment as loud. Instead, the bridge of the Meridian went silent the instant the drive spun past 0.999c, and stayed silent as the numbers kept climbing past the point where numbers were supposed to stop meaning anything.
+
+"Velocity is not the anomaly," said Okonkwo-Lin, hunched over the drive telemetry like a man reading his own autopsy. "Velocity is fine. Velocity we understand. It's the light."
+
+Wren left her harness and crossed to his station. Outside the viewport, the stars had already done the thing the old physics papers promised — smeared backward into a tunnel of blue-shifted fire, the whole visible universe compressing into a bright ring dead ahead. Beautiful. Expected. She had seen the simulations a thousand times.
+
+What the simulations had never shown her was the dark patch at the center of that ring. A perfect circle of black, sitting exactly where the tunnel should have narrowed to a point of blinding white.
+
+"Sensor fault," she said, because it was the reasonable thing to say.
+
+"Four independent arrays." Okonkwo-Lin didn't look up. "Optical, radio, gravitic, the old backup array nobody trusts. All four agree. There is something directly ahead of us that isn't emitting light. It isn't reflecting it either. It's — " he stopped, hunting for a word that existed in no physics vocabulary he'd ever been trained in — "it's declining it. Like the photons are being asked a question and choosing not to answer."
+
+Captain Reyes's voice cut in from the command chair, flat in the particular way she went flat when she was frightened and unwilling to let it show. "Time to closest approach to that object."
+
+"There is no closest approach," Okonkwo-Lin said. "It's not on a trajectory. It's not moving. It's growing."
+
+Wren felt it then, the thing she would spend the rest of her life trying to describe to review boards and committees and, eventually, to her own daughter: not fear exactly, but the sensation of being *noticed* by something too large to have a face. The black circle ahead of them was not a hole in the sky. It was an aperture, and it was opening at a rate that had nothing to do with the Meridian's velocity, because the math said it should have taken four more hours to fill their forward view and instead it was going to fill it in the next ninety seconds.
+
+"Bring us down," Reyes said. "Now. Full deceleration, I don't care what it does to the hull."
+
+"Captain." Okonkwo-Lin's voice had gone very quiet. "It's already inside the deceleration envelope. It's already—"
+
+The lights on the bridge did not go out. That was the detail Wren would repeat most often afterward, the one people found hardest to believe: the lights stayed on, full and steady, even as the viewport, the stars, the tunnel of blue fire, and the black declining aperture at its center all simply stopped being visible, replaced by a color that every person on the bridge would later swear, independently, under separate questioning, was not a color the human eye should have been able to perceive at all.
+
+Then something on the other side of that color looked back.`;
+
+function load(){
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if(raw) return JSON.parse(raw);
+  }catch(e){}
+  return { title: DEFAULT_TITLE, pages:[DEFAULT_PAGE_1] };
+}
+function save(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+
+let state = load();
+if(!state.pages || state.pages.length===0) state.pages = [''];
+
+let editMode = false;
+let currentIndex = 0;
+
+const CARD_W = 300, CARD_H = 520, GAP = 40;
+let scale = 1, tx = 0, ty = 0;
+
+const titleInput = document.getElementById('bookTitle');
+const boardWrap = document.getElementById('boardWrap');
+const boardInner = document.getElementById('boardInner');
+const pageJump = document.getElementById('pageJump');
+const prevBtn = document.getElementById('prevBtn');
+const nextBtn = document.getElementById('nextBtn');
+const readModeBtn = document.getElementById('readModeBtn');
+const editModeBtn = document.getElementById('editModeBtn');
+const boardBtn = document.getElementById('boardBtn');
+const menuSheet = document.getElementById('menuSheet');
+const bookStats = document.getElementById('bookStats');
+
+titleInput.value = state.title || '';
+titleInput.addEventListener('input', ()=>{ state.title = titleInput.value; save(); });
+
+function wordCount(text){
+  const t = (text||'').trim();
+  return t ? t.split(/\s+/).length : 0;
+}
+
+function cardX(i){ return i * (CARD_W + GAP); }
+
+function buildBoard(){
+  boardInner.innerHTML = '';
+  state.pages.forEach((text, i)=>{
+    const card = document.createElement('div');
+    card.className = 'page-card';
+    card.style.left = cardX(i) + 'px';
+    card.dataset.index = i;
+
+    const num = document.createElement('div');
+    num.className = 'card-num';
+    num.textContent = 'Page ' + (i+1);
+    card.appendChild(num);
+
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.readOnly = !editMode;
+    ta.placeholder = 'Start writing page ' + (i+1) + '...';
+    ta.addEventListener('input', ()=>{
+      state.pages[i] = ta.value;
+      wc.textContent = wordCount(ta.value) + ' words';
+      save();
+      updateStats();
+    });
+    card.appendChild(ta);
+
+    const wc = document.createElement('div');
+    wc.className = 'card-wc';
+    wc.textContent = wordCount(text) + ' words';
+    card.appendChild(wc);
+
+    boardInner.appendChild(card);
+  });
+  updateStats();
+}
+
+function updateStats(){
+  const total = state.pages.length;
+  bookStats.textContent = total + (total===1?' page · ':' pages · ') +
+    state.pages.reduce((s,p)=>s+wordCount(p),0) + ' words';
+}
+
+function applyTransform(){
+  boardInner.style.transform = `translate(${tx}px, ${ty}px) scale(${scale})`;
+  const centerX = boardWrap.clientWidth/2;
+  let best = 0, bestDist = Infinity;
+  state.pages.forEach((_, i)=>{
+    const screenCenter = tx + (cardX(i) + CARD_W/2) * scale;
+    const d = Math.abs(screenCenter - centerX);
+    if(d < bestDist){ bestDist = d; best = i; }
+  });
+  currentIndex = best;
+  pageJump.textContent = 'Page ' + (currentIndex+1) + ' / ' + state.pages.length;
+}
+
+function centerOn(idx, targetScale){
+  const boardW = boardWrap.clientWidth, boardH = boardWrap.clientHeight;
+  scale = targetScale;
+  tx = boardW/2 - (cardX(idx) + CARD_W/2) * scale;
+  ty = boardH/2 - (CARD_H/2) * scale;
+  applyTransform();
+}
+
+function setMode(mode){
+  editMode = mode === 'write';
+  readModeBtn.classList.toggle('active', !editMode);
+  editModeBtn.classList.toggle('active', editMode);
+  boardInner.querySelectorAll('textarea').forEach(ta=>{ ta.readOnly = !editMode; });
+}
+readModeBtn.addEventListener('click', ()=>setMode('read'));
+editModeBtn.addEventListener('click', ()=>setMode('write'));
+
+let inBoardView = false;
+boardBtn.addEventListener('click', ()=>{
+  inBoardView = !inBoardView;
+  boardBtn.classList.toggle('active', inBoardView);
+  if(inBoardView){
+    centerOn(currentIndex, 0.42);
+  } else {
+    centerOn(currentIndex, 1);
+  }
+});
+
+prevBtn.addEventListener('click', ()=>{
+  if(currentIndex > 0) centerOn(currentIndex-1, inBoardView ? scale : 1);
+});
+nextBtn.addEventListener('click', ()=>{
+  if(currentIndex < state.pages.length-1) centerOn(currentIndex+1, inBoardView ? scale : 1);
+});
+
+// ---- pointer-based pan & pinch-zoom (map style) ----
+const pointers = new Map();
+let lastMid = null, lastDist = null;
+let dragMoved = 0;
+let tapStart = null;
+
+function dist(a,b){ return Math.hypot(a.x-b.x, a.y-b.y); }
+function mid(a,b){ return {x:(a.x+b.x)/2, y:(a.y+b.y)/2}; }
+
+boardWrap.addEventListener('pointerdown', (e)=>{
+  boardWrap.setPointerCapture(e.pointerId);
+  pointers.set(e.pointerId, {x:e.clientX, y:e.clientY});
+  dragMoved = 0;
+  if(pointers.size === 1){
+    tapStart = {x:e.clientX, y:e.clientY, t:Date.now(), target:e.target};
+  } else {
+    tapStart = null;
+  }
+  lastMid = null; lastDist = null;
+});
+
+boardWrap.addEventListener('pointermove', (e)=>{
+  if(!pointers.has(e.pointerId)) return;
+  const prev = pointers.get(e.pointerId);
+  const cur = {x:e.clientX, y:e.clientY};
+  pointers.set(e.pointerId, cur);
+  dragMoved += Math.hypot(cur.x-prev.x, cur.y-prev.y);
+
+  if(pointers.size === 1){
+    tx += cur.x - prev.x;
+    ty += cur.y - prev.y;
+    applyTransform();
+  } else if(pointers.size === 2){
+    const pts = Array.from(pointers.values());
+    const m = mid(pts[0], pts[1]);
+    const d = dist(pts[0], pts[1]);
+    if(lastDist){
+      const factor = d / lastDist;
+      const newScale = Math.max(0.2, Math.min(2.5, scale * factor));
+      tx = m.x - (m.x - tx) * (newScale/scale);
+      ty = m.y - (m.y - ty) * (newScale/scale);
+      scale = newScale;
+      applyTransform();
+    }
+    lastMid = m; lastDist = d;
+  }
+});
+
+function endPointer(e){
+  pointers.delete(e.pointerId);
+  if(pointers.size < 2){ lastMid = null; lastDist = null; }
+  if(pointers.size === 0 && tapStart && dragMoved < 8 && Date.now()-tapStart.t < 400){
+    const tag = tapStart.target.tagName;
+    if(tag !== 'TEXTAREA'){
+      const card = tapStart.target.closest('.page-card');
+      if(card){
+        const idx = parseInt(card.dataset.index, 10);
+        inBoardView = false;
+        boardBtn.classList.remove('active');
+        centerOn(idx, 1);
+      }
+    }
+  }
+  tapStart = null;
+}
+boardWrap.addEventListener('pointerup', endPointer);
+boardWrap.addEventListener('pointercancel', endPointer);
+
+window.addEventListener('resize', ()=>centerOn(currentIndex, scale));
+
+// ---- menu sheet ----
+document.getElementById('menuBtn').addEventListener('click', ()=>menuSheet.classList.add('open'));
+document.getElementById('closeSheetBtn').addEventListener('click', ()=>menuSheet.classList.remove('open'));
+menuSheet.addEventListener('click', (e)=>{ if(e.target === menuSheet) menuSheet.classList.remove('open'); });
+
+document.getElementById('insertAfterBtn').addEventListener('click', ()=>{
+  state.pages.splice(currentIndex+1, 0, '');
+  save();
+  buildBoard();
+  menuSheet.classList.remove('open');
+  setMode('write');
+  centerOn(currentIndex+1, 1);
+});
+document.getElementById('insertBeforeBtn').addEventListener('click', ()=>{
+  state.pages.splice(currentIndex, 0, '');
+  save();
+  buildBoard();
+  menuSheet.classList.remove('open');
+  setMode('write');
+  centerOn(currentIndex, 1);
+});
+document.getElementById('deletePageBtn').addEventListener('click', ()=>{
+  if(state.pages.length <= 1){ alert('Book needs at least one page.'); return; }
+  if(!confirm('Delete page ' + (currentIndex+1) + '? Cannot be undone.')) return;
+  state.pages.splice(currentIndex,1);
+  save();
+  buildBoard();
+  menuSheet.classList.remove('open');
+  centerOn(Math.min(currentIndex, state.pages.length-1), 1);
+});
+
+document.getElementById('backupBtn').addEventListener('click', ()=>{
+  const blob = new Blob([JSON.stringify(state, null, 2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const safeName = (state.title || 'book').trim().replace(/[^a-z0-9]+/gi,'_').toLowerCase() || 'book';
+  a.href = url;
+  a.download = safeName + '_backup.json';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  menuSheet.classList.remove('open');
+});
+
+document.getElementById('restoreBtn').addEventListener('click', ()=>{
+  document.getElementById('fileInput').click();
+});
+document.getElementById('fileInput').addEventListener('change', (e)=>{
+  const file = e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = (ev)=>{
+    try{
+      const data = JSON.parse(ev.target.result);
+      if(!Array.isArray(data.pages)) throw new Error('bad format');
+      if(!confirm('Replace current book with restored backup?')) return;
+      state = data;
+      titleInput.value = state.title || '';
+      save();
+      buildBoard();
+      centerOn(0, 1);
+      menuSheet.classList.remove('open');
+    }catch(err){
+      alert('Invalid backup file.');
+    }
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+});
+
+document.getElementById('pdfBtn').addEventListener('click', ()=>{
+  const printArea = document.getElementById('printArea');
+  printArea.innerHTML = '';
+  const titleDiv = document.createElement('div');
+  titleDiv.className = 'print-title';
+  titleDiv.textContent = state.title || 'Untitled Novel';
+  printArea.appendChild(titleDiv);
+  state.pages.forEach(text=>{
+    const p = document.createElement('div');
+    p.className = 'print-page';
+    p.textContent = text;
+    printArea.appendChild(p);
+  });
+  menuSheet.classList.remove('open');
+  setTimeout(()=>window.print(), 100);
+});
+
+// ---- text selection toolbar (read aloud / make video) ----
+const selToolbar = document.getElementById('selToolbar');
+let selectedText = '';
+
+function checkSelection(e){
+  if(e.target.tagName !== 'TEXTAREA') return;
+  const ta = e.target;
+  const text = ta.value.substring(ta.selectionStart, ta.selectionEnd).trim();
+  if(text.length > 0){
+    selectedText = text;
+    selToolbar.classList.add('show');
+  } else {
+    selToolbar.classList.remove('show');
+  }
+}
+['select','mouseup','touchend','keyup'].forEach(evt=>{
+  boardInner.addEventListener(evt, (e)=>setTimeout(()=>checkSelection(e), 0), true);
+});
+
+document.getElementById('selReadBtn').addEventListener('click', ()=>{
+  if(!selectedText) return;
+  if(!('speechSynthesis' in window)){ alert('Speech not supported on this browser.'); return; }
+  speechSynthesis.cancel();
+  const utter = new SpeechSynthesisUtterance(selectedText);
+  utter.rate = 0.95;
+  speechSynthesis.speak(utter);
+  selToolbar.classList.remove('show');
+});
+
+document.getElementById('selVideoBtn').addEventListener('click', ()=>{
+  if(!selectedText) return;
+  selToolbar.classList.remove('show');
+  makeVideo(selectedText);
+});
+
+// ---- slideshow video generation (local, canvas + MediaRecorder) ----
+const videoSheet = document.getElementById('videoSheet');
+const videoCanvas = document.getElementById('videoCanvas');
+const videoStatus = document.getElementById('videoStatus');
+const videoResult = document.getElementById('videoResult');
+const vctx = videoCanvas.getContext('2d');
+
+document.getElementById('closeVideoBtn').addEventListener('click', ()=>{
+  videoSheet.classList.remove('open');
+});
+
+function splitIntoSlides(text, maxChars){
+  const sentences = text.replace(/\s+/g,' ').trim().split(/(?<=[.!?])\s+/);
+  const slides = [];
+  let cur = '';
+  sentences.forEach(s=>{
+    if((cur + ' ' + s).trim().length > maxChars && cur){
+      slides.push(cur.trim());
+      cur = s;
+    } else {
+      cur = (cur + ' ' + s).trim();
+    }
+  });
+  if(cur) slides.push(cur.trim());
+  return slides.length ? slides : [text];
+}
+
+function wrapText(ctx, text, maxWidth){
+  const words = text.split(' ');
+  const lines = [];
+  let line = '';
+  words.forEach(w=>{
+    const test = line ? line + ' ' + w : w;
+    if(ctx.measureText(test).width > maxWidth && line){
+      lines.push(line);
+      line = w;
+    } else {
+      line = test;
+    }
+  });
+  if(line) lines.push(line);
+  return lines;
+}
+
+function drawSlide(text, isDark){
+  const W = videoCanvas.width, H = videoCanvas.height;
+  vctx.fillStyle = isDark ? '#181512' : '#f7f1e3';
+  vctx.fillRect(0,0,W,H);
+  vctx.fillStyle = isDark ? '#e9e2d6' : '#2a2420';
+  vctx.font = '600 44px Georgia, serif';
+  vctx.textBaseline = 'middle';
+  const lines = wrapText(vctx, text, W - 120);
+  const lineHeight = 62;
+  const totalH = lines.length * lineHeight;
+  let y = (H - totalH) / 2 + lineHeight/2;
+  lines.forEach(line=>{
+    const w = vctx.measureText(line).width;
+    vctx.fillText(line, (W - w)/2, y);
+    y += lineHeight;
+  });
+}
+
+function makeVideo(text){
+  videoSheet.classList.add('open');
+  videoResult.innerHTML = '';
+  videoStatus.textContent = 'Preparing slides...';
+
+  const slides = splitIntoSlides(text, 130);
+  const isDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+
+  drawSlide(slides[0], isDark);
+
+  let mimeType = 'video/webm;codecs=vp9';
+  if(!MediaRecorder.isTypeSupported(mimeType)) mimeType = 'video/webm;codecs=vp8';
+  if(!MediaRecorder.isTypeSupported(mimeType)) mimeType = 'video/webm';
+
+  const stream = videoCanvas.captureStream(30);
+  const recorder = new MediaRecorder(stream, {mimeType});
+  const chunks = [];
+  recorder.ondataavailable = (e)=>{ if(e.data.size > 0) chunks.push(e.data); };
+  recorder.onstop = ()=>{
+    const blob = new Blob(chunks, {type:'video/webm'});
+    const url = URL.createObjectURL(blob);
+    videoStatus.textContent = 'Done — ' + slides.length + ' slides.';
+    videoResult.innerHTML = '';
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'book_clip.webm';
+    a.textContent = '⬇ Download Video';
+    videoResult.appendChild(a);
+  };
+
+  recorder.start();
+
+  let i = 0;
+  function nextSlide(){
+    if(i >= slides.length){
+      recorder.stop();
+      return;
+    }
+    videoStatus.textContent = 'Rendering slide ' + (i+1) + ' / ' + slides.length + '...';
+    drawSlide(slides[i], isDark);
+    const words = slides[i].split(' ').length;
+    const duration = Math.max(2200, Math.min(6000, words * 420));
+    i++;
+    setTimeout(nextSlide, duration);
+  }
+  setTimeout(nextSlide, 400);
+}
+
+buildBoard();
+setMode('read');
+centerOn(0, 1);
+</script>
+</body>
+</html>
